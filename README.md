@@ -17,7 +17,7 @@ S. Taner, V. Palhares and C. Studer, "Channel Charting in Real-World Coordinates
 
 #### Step 1: Download and save the data
 
-- From [dichasus-cf0x Dataset: Distributed Antenna Setup in Industrial Environment, Day 1](https://darus.uni-stuttgart.de/dataset.xhtml?persistentId=doi:10.18419/DARUS-2854&version=3.0), download the specifications file ```spec.json```, the channel files ```dichasus-cf02```, ```dichasus-cf03`` and ```dichasus-cf04``` (which should have the ```.tfrecord``` extension), and their offset estimates (which should be ```reftx-offsets-dichasus-cf0x.json```) into a folder called ```data_raw```.
+- From [dichasus-cf0x Dataset: Distributed Antenna Setup in Industrial Environment, Day 1](https://darus.uni-stuttgart.de/dataset.xhtml?persistentId=doi:10.18419/DARUS-2854&version=3.0), download the specifications file ```spec.json```, the channel files ```dichasus-cf02```, ```dichasus-cf03``` and ```dichasus-cf04``` (which should have the ```.tfrecord``` extension), and their offset estimates (which should be ```reftx-offsets-dichasus-cf0x.json```) into a folder called ```data_raw```.
 - Run ```preprocess_dichasus.py```. This will store ```.np``` versions of the CSI, timestamps, and ground-truth positions extracted from the ```.tfrecord``` files in a folder called ```data``` along with AP positions and LoS bounding boxes for each AP.
 
 #### Step 2: Channel charting
