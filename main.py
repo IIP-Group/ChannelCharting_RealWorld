@@ -33,8 +33,8 @@ learning_type = 'Triplet' # uses the timestamp-based triplet loss and/or the rec
 # lambda_box : the weight of the LoS bounding box loss loss against triplet loss
 # Set both lambda_b and lambda_box to 0 for only self-supervised learning (using only the triplet loss). The resulting channel chart won't be in real-world coordinates if lambda_.
 # Set to a positive number for triplet + bilateration + bounding box loss. The resulting channel chart should be in real-world coordinates.
-lambda_b = 0 # set to 10 for self-and weakly supervised method P2, keep it at 0 otherwise
-lambda_box = 0 # set to 1 for self-and weakly supervised method P2, keep it at 0 otherwise
+lambda_b = 0 # set to 10 for weakly supervised methods P1 and P2, keep it at 0 otherwise
+lambda_box = 0 # set to 1 for weakly supervised methods P1 and P2, keep it at 0 otherwise
 bb_src= 'ap' 
 box_mode = 1
 epoch_Lt_on = 0 # triplet loss is turned ON at this epoch
@@ -65,7 +65,7 @@ fe_method = 'abs'
 
 # Triplet loss parameters
 Tc = 5
-M_t = 0.6 # margin in triplet loss
+M_t = 0.5 # margin in triplet loss
 num_triplets_per_anchor = 1
 
 # Bilateration loss parameters
