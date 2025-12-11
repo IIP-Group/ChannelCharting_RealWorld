@@ -104,8 +104,8 @@ class Parameter:
             ax.scatter(self.ap_pos[:, 0], self.ap_pos[:, 1], marker='^')
             for a in range(self.ap_pos.shape[0]):
                 ax.annotate(a, (self.ap_pos[a, 0], self.ap_pos[a, 1]))
-            ax.set_xlabel('x (m)')
-            ax.set_ylabel('y (m)')
+            ax.set_xlabel('x [m]')
+            ax.set_ylabel('y [m]')
             ax.axis('equal')
             # ax.set_aspect('equal', 'box')
             ax.grid()
@@ -113,6 +113,7 @@ class Parameter:
             raise Exception('Undefined dimensions for plotting the scenario')
         if title is not None:
             plt.title(title)
+        return ax
     
     def add_noise_np(self, H: np.array) -> np.array:
         """
@@ -151,15 +152,6 @@ class Parameter:
         arr2 = 10*np.log10(s[s != 0]**2/(N0*(T.shape[-1])))
         print('Actual SNR per AP', np.min(arr[arr != - np.inf]), np.max(arr), np.mean(arr[arr != - np.inf]))
         print('Expected SNR per AP', np.min(arr2[arr2 != - np.inf]), np.max(arr2), np.mean(arr2[arr2 != - np.inf]))
-        
-        fig = plt.figure()
-        data_sorted = np.sort(arr[arr != - np.inf])
-        cdf = np.arange(1, len(data_sorted) + 1) / len(data_sorted)
-        
-        plt.plot(data_sorted, cdf)
-        plt.xlabel("SNR")
-        plt.ylabel("cumulative probability")
-        plt.grid()
         
         # Keep the zeros as zeros
         zero_idcs = np.where(H == 0)

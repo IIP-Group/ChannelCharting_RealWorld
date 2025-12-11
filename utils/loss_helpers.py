@@ -7,24 +7,7 @@ Helper functions for the triplet loss and AP receive power-related losses.
 import numpy as np
 import torch
 
-#%% Bounding box loss-related
-
-def find_bounding_box(pos, boxes):
-    """
-    pos : N, 2
-    boxes: N_box, 2, 2. Nonoverlapping rectangular boxes defined by two corners: xmin, ymin; xmax, ymax
-
-    """
-    labels = - np.ones(len(pos))
-    for u, pos_u in enumerate(pos):
-        in_box_x = np.logical_and(pos_u[0] >= boxes[:,0,0], pos_u[0] <= boxes[:,1,0])
-        in_box_y = np.logical_and(pos_u[1] >= boxes[:,0,1], pos_u[1] <= boxes[:,1,1])
-        in_box = np.logical_and(in_box_x, in_box_y)
-        if in_box.any():
-            labels[u] = np.where(in_box)[0][0]
-    
-    return labels
-
+#%% Bounding box
 def bb_loss(pos, boxes):
     """
     Bounding box loss.
@@ -83,6 +66,7 @@ def count_wrong_triplets(pow_per_ap, UE_pos, ap_locs, M_p=0, P_thresh=-np.inf, f
                 dist_near = np.linalg.norm(UE_pos[u] - ap_locs[valid_APs[w[0]]], 2, -1)
                 dist_far  = np.linalg.norm(UE_pos[u] - ap_locs[valid_APs[w[1]]], 2, -1)
                 num_wrong_per_user[u] = np.sum(dist_near - dist_far > false_threshold) 
+    print(np.sum(num_wrong_per_user), np.sum(num_ap_pairs_per_user))
     return num_wrong_per_user, num_ap_pairs_per_user
     
 #%% Triplet loss-related

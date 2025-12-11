@@ -147,7 +147,8 @@ def triplet_pass(model, X: torch.Tensor, triplet_batch: np.array):
 def predict(model, X: torch.Tensor) -> torch.Tensor:
     """
     Set a model's network in evaluation mode and make a forward pass.
-    
+    24-01-26 updates: Y is not in GPU device anymore. Added with torch.no_grad()
+
     Parameters
     ----------
     X : torch.Tensor
@@ -172,6 +173,25 @@ def predict(model, X: torch.Tensor) -> torch.Tensor:
             Y = torch.concatenate((Y, batch_y))
     return Y
 
+def set_model_device(model, device):
+    """
+    Set the model's device and move the model's network to this device.
+
+    Parameters
+    ----------
+    model : SemiOrWeaklySupervisedModel or SupervisedModel or SemisupervisedModel 
+        A ...Model object.
+    device : 
+        torch.device or "cpu"
+
+    Returns
+    -------
+    None.
+
+    """
+    model.device = device
+    model.network.to(device)
+    
 #%% "Models" to train the FCNet using different learning approaches
 
 class TripletModel:
@@ -212,10 +232,11 @@ class TripletModel:
             print('Tc:', self.par.Tc, ', M:', self.par.M_t, ', M_p:', self.par.M_p, self.par.P_thresh,
               'use_sch:', self.par.use_scheduler, ', sche param:', self.par.scheduler_param)
     
-    def train(self, dataset: torch.utils.data.Dataset, bounding_boxes=None, box_labels=None, measure_perf=False):  
+    def train(self, dataset: torch.utils.data.Dataset, bounding_boxes=None, box_labels=None, measure_perf=False, plot_each_loss=False):  
         """
         Train the network based on model parameters.
-        If lambda_b = 0 and lambda_box = 0, the training is based on only the triplet loss -> self-supervised.
+        If lambda_b = 0, the training is based on only the triplet loss -> self-supervised.
+        Else if lambda_b = inf, the training is based on only the bilateration loss -> weakly-supervised.
         Else -> self- and weakly-supervised.
         
         Parameters
@@ -223,10 +244,6 @@ class TripletModel:
         dataset : torch.utils.data.Dataset
             Training dataset consisting of CSI features, timestamps, and 
             normalized received power per AP. (The best AP for each UE should have 0 dB.)
-        bounding_boxes : np.array
-            LoS bounding boxes for each AP.
-        box_labels: np.array
-            The bounding box index to be used for each UE.
             
 
         Returns
@@ -242,7 +259,7 @@ class TripletModel:
         if measure_perf: 
             assert len(dataset[:]) > 3
             val_subset = np.random.choice(np.arange(X.shape[0], dtype=int), int(X.shape[0] / 5), replace=False)
-            
+
             Y_gt = dataset[:][3][val_subset]
             d = torch.cdist(Y_gt, Y_gt, compute_mode='donot_use_mm_for_euclid_dist')
             ks_per_epoch = torch.zeros(self.par.num_epochs)
@@ -307,7 +324,11 @@ class TripletModel:
         progress_bar = trange(self.par.num_epochs)  
         # To track the decrease of loss during training:
         loss_per_epoch = torch.zeros(self.par.num_epochs, device=self.device)
-        
+        if plot_each_loss:
+            losst_per_epoch = torch.zeros(self.par.num_epochs, device=self.device)
+            lossbi_per_epoch = torch.zeros(self.par.num_epochs, device=self.device)
+            lossbox_per_epoch = torch.zeros(self.par.num_epochs, device=self.device)
+
         # Training loop
         for epoch_idx in progress_bar:
             
@@ -376,8 +397,25 @@ class TripletModel:
                 ks_per_epoch[epoch_idx] = ks 
                 tw_per_epoch[epoch_idx], ct_per_epoch[epoch_idx] = evaluate_cc(Y_gt_np, Y.numpy(), metric='TW-CT')
                 
+        if plot_each_loss:
+            losst_per_epoch = losst_per_epoch.cpu().numpy() / num_batches
+            lossbi_per_epoch = lossbi_per_epoch.cpu().numpy() / num_batches
+            lossbox_per_epoch = lossbox_per_epoch.cpu().numpy() / num_batches
         loss_per_epoch = loss_per_epoch.cpu().numpy() / num_batches
         
+        if plot_each_loss:
+            plt.figure()
+            plt.plot(losst_per_epoch)
+            plt.title('loss t')
+            
+            if self.par.lambda_b != 0:
+                plt.figure()
+                plt.plot(lossbi_per_epoch)
+                plt.title('loss bi')
+            if self.par.lambda_box != 0:
+                plt.figure()
+                plt.plot(lossbox_per_epoch)
+                plt.title('loss box')
         
         if measure_perf:
             plt.figure()
@@ -426,7 +464,7 @@ class SupervisedModel:
             print('Tc:', self.par.Tc, ', M:', self.par.M_t,  
               'use_sch:', self.par.use_scheduler, ', sche param:', self.par.scheduler_param)
     
-    def train(self, dataset: torch.utils.data.Dataset):
+    def train(self, dataset: torch.utils.data.Dataset, val_dataset: torch.utils.data.Dataset):
         """
         Train the network based on model parameters.
         
@@ -443,11 +481,16 @@ class SupervisedModel:
         """
         train_loader = torch.utils.data.DataLoader(
             dataset, batch_size=self.par.batch_size, shuffle=True) 
+        
+        val_loader = torch.utils.data.DataLoader(
+            val_dataset, batch_size=self.par.batch_size, shuffle=True) 
     
+        
         num_batches = len(train_loader)
 
         progress_bar = trange(self.par.num_epochs)  # just trying if this makes shit slow
         loss_per_epoch = torch.zeros(self.par.num_epochs, device=self.device)
+        val_loss_per_epoch = np.zeros((self.par.num_epochs))
         
         for epoch_idx in progress_bar:
             self.network.train()  # set the module in training mode
@@ -472,10 +515,23 @@ class SupervisedModel:
             loss_per_epoch[epoch_idx] = sum_loss_per_batch / num_batches
             if self.par.use_scheduler == 1: self.scheduler.step()
         
-        loss_per_epoch = loss_per_epoch.cpu().numpy()
-        return loss_per_epoch
+            # VALIDATION BLOCKS HERE
+            self.network.eval()
+            val_loss = 0
+            with torch.no_grad():
+                for batch_idx, (batch_x,batch_y) in enumerate(val_loader):
+                    batch_x, batch_y = batch_x.to(self.device), batch_y.to(self.device)
+                    batch_y_hat = self.network(batch_x) 
+                    val_loss += torch.sum(torch.linalg.norm(batch_y_hat - batch_y,2,-1)**2)            
+                val_loss_per_epoch[epoch_idx] = val_loss.item() / len(val_loader.dataset)  
+                
+        # loss_per_epoch = loss_per_epoch.cpu().numpy()
+        # return loss_per_epoch
     
-#%%
+        loss_per_epoch = loss_per_epoch.cpu().numpy()
+        return loss_per_epoch, val_loss_per_epoch 
+
+#%%    
 class SemisupervisedModel:
     """
     A class to train an FCNet using the triplet loss 
